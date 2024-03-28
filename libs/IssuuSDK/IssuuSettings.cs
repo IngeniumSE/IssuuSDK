@@ -15,6 +15,11 @@ public class IssuuSettings
 	public const string ConfigurationSection = "Issuu";
 
 	/// <summary>
+	/// Gets or sets the environment for the Issuu API.
+	/// </summary>
+	public string BaseUrl { get; set; } = "https://api.issuu.com/v2";
+
+	/// <summary>
 	/// Gets or sets whether to capture request content.
 	/// </summary>
 	public bool CaptureRequestContent { get; set; }
@@ -56,22 +61,22 @@ public class IssuuDefaultSettings
 	/// <summary>
 	/// Gets or sets the access type for the Issuu document.
 	/// </summary>
-	public IssuuAccess Access { get; set; } = IssuuAccess.Private;
+	public DocumentAccess Access { get; set; } = DocumentAccess.Private;
 
 	/// <summary>
 	/// Gets or sets whether the document is downloadable.
 	/// </summary>
 	public bool Downloadable { get; set; } = false;
-}
 
-/// <summary>
-/// Getts the possible access types for an Issuu document.
-/// </summary>
-public enum IssuuAccess
-{
-	Public,
+	/// <summary>
+	/// Gets or sets whether the document is a preview of larger content.
+	/// </summary>
+	public bool Preview { get; set; } = false;
 
-	Private
+	/// <summary>
+	/// Gets or sets whether to show detected links when the document is published.
+	/// </summary>
+	public bool ShowDetectedLinks { get; set; } = false;
 }
 
 /// <summary>

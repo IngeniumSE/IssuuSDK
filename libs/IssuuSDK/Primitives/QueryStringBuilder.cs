@@ -3,9 +3,9 @@
 
 namespace IssuuSDK;
 
-class QueryStringBuilder
+class QueryStringBuilder(QueryString? qs = default)
 {
-	QueryString _qs = QueryString.Empty;
+	QueryString _qs = qs.HasValue ? (QueryString)qs : QueryString.Empty;
 
 	public QueryStringBuilder AddParameter(string name, object? value)
 	{
@@ -22,4 +22,6 @@ class QueryStringBuilder
 	}
 
 	public QueryString Build() => _qs;
+
+	public bool HasQuery => _qs.HasValue && _qs.Value is { Length: > 0 };
 }

@@ -204,4 +204,9 @@ public class RateLimiting
 	/// Gets the limit of calls available.
 	/// </summary>
 	public int Limit { get; set; }
+
+	/// <summary>
+	/// Gets the reset time for the rate limiting.
+	/// </summary>
+	public DateTimeOffset Reset { get; set; }
 }

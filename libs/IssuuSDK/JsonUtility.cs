@@ -16,6 +16,8 @@ static class JsonUtility
 			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 		};
 
+		options.Converters.Add(new UpperCaseJsonStringEnumConverter());
+
 		return options;
 	}
 
@@ -27,6 +29,32 @@ static class JsonUtility
 			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 		};
 
+		options.Converters.Add(new UpperCaseJsonStringEnumConverter());
+
 		return options;
 	}
+}
+
+public class UpperCaseJsonStringEnumConverter : JsonStringEnumConverter
+{
+	public UpperCaseJsonStringEnumConverter() : base(namingPolicy: UpperCaseNamingPolicy.Instance) { }
+}
+
+public class UpperCaseNamingPolicy : JsonNamingPolicy
+{
+	public static readonly UpperCaseNamingPolicy Instance = new();
+
+	public override string ConvertName(string name) => name.ToUpperInvariant();
+}
+
+public class LowerCaseJsonStringEnumConverter : JsonStringEnumConverter
+{
+	public LowerCaseJsonStringEnumConverter() : base(namingPolicy: LowerCaseNamingPolicy.Instance) { }
+}
+
+public class LowerCaseNamingPolicy : JsonNamingPolicy
+{
+	public static readonly LowerCaseNamingPolicy Instance = new();
+
+	public override string ConvertName(string name) => name.ToLowerInvariant();
 }

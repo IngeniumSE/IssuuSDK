@@ -5,7 +5,7 @@
 		<!-- Microsoft.Extensions.* Ver -->
 		<DotNet8Version>8.0.0</DotNet8Version>
   </PropertyGroup>
-	
+
   <ItemGroup>
 		<PackageVersion Include="Ben.Demystifier" Version="0.4.1" />
 		<PackageVersion Include="BenchmarkDotNet" Version="0.13.7" />
@@ -21,6 +21,7 @@
 		<PackageVersion Include="Microsoft.Extensions.Http" Version="$(DotNet8Version)" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
 		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="$(DotNet8Version)" />
+		<PackageVersion Include="SlugGenerator" Version="2.0.2" />
 		<PackageVersion Include="System.Net.Http.Json" Version="$(DotNet8Version)" />
 		<PackageVersion Include="System.Text.Json" Version="$(DotNet8Version)" />
 		<PackageVersion Include="xunit" Version="2.6.5" />

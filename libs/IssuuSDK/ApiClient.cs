@@ -27,10 +27,12 @@ public abstract class ApiClient
 	{
 		_http = Ensure.IsNotNull(http, nameof(http));
 		_settings = Ensure.IsNotNull(settings, nameof(settings));
-		_baseUrl = new Uri(baseUrl);
+		_baseUrl = new Uri(settings.BaseUrl);
 	}
 
 	#region Send and Fetch
+
+	#region Send
 	protected internal async Task<IssuuResponse> SendAsync(
 		IssuuRequest request,
 		CancellationToken cancellationToken = default)
@@ -146,8 +148,10 @@ public abstract class ApiClient
 			return response;
 		}
 	}
+	#endregion
 
-	protected internal async Task<IssuuResponse<TResponse>> FetchAsync<TResponse>(
+	#region Fetch Many
+	protected internal async Task<IssuuResponse<TResponse>> FetchManyAsync<TResponse>(
 		IssuuRequest request,
 		CancellationToken cancellationToken = default)
 		where TResponse : class
@@ -161,10 +165,12 @@ public abstract class ApiClient
 			httpResp = await _http.SendAsync(httpReq, cancellationToken)
 				.ConfigureAwait(false);
 
-			var transformedResponse = await TransformResponse<TResponse>(
+			var transformedResponse = await TransformManyResponse<TResponse>(
 				httpReq.Method,
 				httpReq.RequestUri,
-				httpResp)
+				httpResp,
+				request.Page,
+				cancellationToken)
 					.ConfigureAwait(false); ;
 
 			if (_settings.CaptureRequestContent && httpReq.Content is not null)
@@ -206,7 +212,7 @@ public abstract class ApiClient
 		}
 	}
 
-	protected internal async Task<IssuuResponse<TResponse>> FetchAsync<TRequest, TResponse>(
+	protected internal async Task<IssuuResponse<TResponse>> FetchManyAsync<TRequest, TResponse>(
 		IssuuRequest<TRequest> request,
 		CancellationToken cancellationToken = default)
 		where TRequest : notnull
@@ -221,10 +227,12 @@ public abstract class ApiClient
 			httpResp = await _http.SendAsync(httpReq, cancellationToken)
 				.ConfigureAwait(false);
 
-			var transformedResponse = await TransformResponse<TResponse>(
+			var transformedResponse = await TransformManyResponse<TResponse>(
 				httpReq.Method,
 				httpReq.RequestUri,
-				httpResp)
+				httpResp,
+				request.Page,
+				cancellationToken)
 					.ConfigureAwait(false); ;
 
 			if (_settings.CaptureRequestContent && httpReq.Content is not null)
@@ -267,20 +275,169 @@ public abstract class ApiClient
 	}
 	#endregion
 
+	#region Fetch Single
+	protected internal async Task<IssuuResponse<TResponse>> FetchSingleAsync<TResponse>(
+		IssuuRequest request,
+		CancellationToken cancellationToken = default)
+		where TResponse : class
+	{
+		Ensure.IsNotNull(request, nameof(request));
+		var httpReq = CreateHttpRequest(request);
+		HttpResponseMessage? httpResp = null;
+
+		try
+		{
+			httpResp = await _http.SendAsync(httpReq, cancellationToken)
+				.ConfigureAwait(false);
+
+			var transformedResponse = await TransformSingleResponse<TResponse>(
+				httpReq.Method,
+				httpReq.RequestUri,
+				httpResp,
+				request.Page,
+				cancellationToken)
+					.ConfigureAwait(false); ;
+
+			if (_settings.CaptureRequestContent && httpReq.Content is not null)
+			{
+				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
+					.ConfigureAwait(false); ;
+			}
+
+			if (_settings.CaptureResponseContent && httpResp.Content is not null)
+			{
+				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
+					.ConfigureAwait(false);
+			}
+
+			return transformedResponse;
+		}
+		catch (Exception ex)
+		{
+			var response = new IssuuResponse<TResponse>(
+				httpReq.Method,
+				httpReq.RequestUri,
+				false,
+				(HttpStatusCode)0,
+				error: new Error(ex.Message, exception: ex));
+
+			if (httpReq?.Content is not null)
+			{
+				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
+					.ConfigureAwait(false);
+			}
+
+			if (httpResp?.Content is not null)
+			{
+				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
+					.ConfigureAwait(false); ;
+			}
+
+			return response;
+		}
+	}
+
+
+	protected internal async Task<IssuuResponse<TResponse>> FetchSingleAsync<TRequest, TResponse>(
+		IssuuRequest<TRequest> request,
+		CancellationToken cancellationToken = default)
+		where TRequest : notnull
+		where TResponse : class
+	{
+		Ensure.IsNotNull(request, nameof(request));
+		var httpReq = CreateHttpRequest(request);
+		HttpResponseMessage? httpResp = null;
+
+		try
+		{
+			httpResp = await _http.SendAsync(httpReq, cancellationToken)
+				.ConfigureAwait(false);
+
+			var transformedResponse = await TransformSingleResponse<TResponse>(
+				httpReq.Method,
+				httpReq.RequestUri,
+				httpResp,
+				request.Page,
+				cancellationToken)
+					.ConfigureAwait(false); ;
+
+			if (_settings.CaptureRequestContent && httpReq.Content is not null)
+			{
+				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
+					.ConfigureAwait(false);
+			}
+
+			if (_settings.CaptureResponseContent && httpResp.Content is not null)
+			{
+				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
+					.ConfigureAwait(false);
+			}
+
+			return transformedResponse;
+		}
+		catch (Exception ex)
+		{
+			var response = new IssuuResponse<TResponse>(
+				httpReq.Method,
+				httpReq.RequestUri,
+				false,
+				(HttpStatusCode)0,
+				error: new Error(ex.Message, exception: ex));
+
+			if (httpReq?.Content is not null)
+			{
+				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
+					.ConfigureAwait(false);
+			}
+
+			if (httpResp?.Content is not null)
+			{
+				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
+					.ConfigureAwait(false); ;
+			}
+
+			return response;
+		}
+	}
+	#endregion
+
+	#endregion
+
 	#region Preprocessing
 	protected internal HttpRequestMessage CreateHttpRequest(
 		IssuuRequest request)
 	{
 		string pathAndQuery = request.Resource.ToUriComponent();
-		if (request.Query.HasValue)
+		var query = BuildQuery(request.Query, request.Page, request.Size);
+
+		if (query.HasValue)
 		{
-			pathAndQuery += request.Query.Value.ToUriComponent();
+			pathAndQuery += query.Value.ToUriComponent();
 		}
-		var uri = new Uri(_baseUrl, pathAndQuery);
+		var uri = new Uri(_baseUrl, CombineRelativePaths(_baseUrl.PathAndQuery, pathAndQuery));
 
 
 		var message = new HttpRequestMessage(request.Method, uri);
 		message.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_settings.Token}");
+
+		if (request.UseMultipartContent)
+		{
+			var content = new MultipartFormDataContent();
+			if (request.FormData is { Count: > 0 })
+			{
+				foreach (var item in request.FormData)
+				{
+					content.Add(new StringContent(item.Value), item.Key);
+				}
+			}
+
+			if (request.FilePath is not null)
+			{
+				content.Add(new StreamContent(new FileStream(request.FilePath, FileMode.Open)), "file", Path.GetFileName(request.FilePath));
+			}
+
+			message.Content = content;
+		}
 
 		return message;
 	}
@@ -352,10 +509,11 @@ public abstract class ApiClient
 		}
 	}
 
-	protected internal async Task<IssuuResponse<TResponse>> TransformResponse<TResponse>(
+	protected internal async Task<IssuuResponse<TResponse>> TransformManyResponse<TResponse>(
 		HttpMethod method,
 		Uri uri,
 		HttpResponseMessage response,
+		int? page = null,
 		CancellationToken cancellationToken = default)
 		where TResponse : class
 	{
@@ -395,17 +553,20 @@ public abstract class ApiClient
 			{
 				data = await response.Content.ReadFromJsonAsync<DataContainer<TResponse>>(
 					_deserializerOptions, cancellationToken)
-					.ConfigureAwait(false); ;
+					.ConfigureAwait(false);
 
-				if (data?.Meta is not null)
+				if (data is not null)
 				{
-					meta = new Meta
+					if (data.Count.HasValue && data.PageSize.HasValue)
 					{
-						Page = data.Meta.CurrentPage,
-						PageSize = data.Meta.PerPage,
-						TotalItems = data.Meta.Total,
-						TotalPages = data.Meta.LastPage
-					};
+						meta = new()
+						{
+							Page = page ?? 1,
+							PageSize = data.PageSize.Value,
+							TotalItems = data.Count.Value,
+							TotalPages = (int)Math.Ceiling(data.Count.Value / (double)data.PageSize.Value)
+						};
+					}
 				}
 			}
 
@@ -414,8 +575,78 @@ public abstract class ApiClient
 				uri,
 				response.IsSuccessStatusCode,
 				response.StatusCode,
-				data: data?.Data,
+				data: data?.Results,
 				meta: meta,
+				rateLimiting: rateLimiting
+			);
+		}
+		else
+		{
+			Error? error = await GetIssuuError();
+
+			return new IssuuResponse<TResponse>(
+				method,
+				uri,
+				response.IsSuccessStatusCode,
+				response.StatusCode,
+				rateLimiting: rateLimiting,
+				error: error
+			);
+		}
+	}
+
+	protected internal async Task<IssuuResponse<TResponse>> TransformSingleResponse<TResponse>(
+		HttpMethod method,
+		Uri uri,
+		HttpResponseMessage response,
+		int? page = null,
+		CancellationToken cancellationToken = default)
+		where TResponse : class
+	{
+		async Task<Error> GetIssuuError()
+		{
+			Error error;
+			if (response.Content is not null)
+			{
+				var result = await response.Content.ReadFromJsonAsync<ErrorContainer>(
+					_deserializerOptions, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (result?.Message is not { Length: > 0 })
+				{
+					error = new(Resources.ApiClient_UnknownResponse, result?.Errors);
+				}
+				else
+				{
+					error = new(result.Message, result.Errors);
+				}
+			}
+			else
+			{
+				error = new Error(Resources.ApiClient_NoErrorMessage);
+			}
+
+			return error;
+		}
+
+		var rateLimiting = GetRateLimiting(response);
+
+		if (response.IsSuccessStatusCode)
+		{
+			TResponse? data = null;
+			if (response.Content is not null)
+			{
+				data = await response.Content.ReadFromJsonAsync<TResponse>(
+					_deserializerOptions, cancellationToken)
+					.ConfigureAwait(false);
+			}
+
+			return new IssuuResponse<TResponse>(
+				method,
+				uri,
+				response.IsSuccessStatusCode,
+				response.StatusCode,
+				data: data,
 				rateLimiting: rateLimiting
 			);
 		}
@@ -438,9 +669,11 @@ public abstract class ApiClient
 	{
 		var headers = response.Headers;
 
-		return int.TryParse(GetHeader("X-Ratelimit-Remaining", headers), out int remaining)
-			&& int.TryParse(GetHeader("X-Ratelimit-Limit", headers), out int limit)
-			? new RateLimiting { Limit = limit, Remaining = remaining } : null;
+		return
+			int.TryParse(GetHeader("x-ratelimit-remaining", headers), out int remaining)
+			&& int.TryParse(GetHeader("x-ratelimit-limit", headers), out int limit)
+			&& long.TryParse(GetHeader("x-ratelimit-reset", headers), out long reset)
+			? new RateLimiting { Limit = limit, Remaining = remaining, Reset = DateTimeOffset.FromUnixTimeSeconds(reset) } : null;
 	}
 
 	string? GetHeader(string name, HttpHeaders headers)
@@ -459,32 +692,14 @@ public abstract class ApiClient
 
 	class DataContainer<TData>
 	{
-		[JsonPropertyName("data")]
-		public TData? Data { get; set; }
+		[JsonPropertyName("count")]
+		public int? Count { get; set; }
 
-		[JsonPropertyName("meta")]
-		public MetaContainer? Meta { get; set; }
-	}
+		[JsonPropertyName("pageSize")]
+		public int? PageSize { get; set; }
 
-	class MetaContainer
-	{
-		[JsonPropertyName("current_page")]
-		public int CurrentPage { get; set; }
-
-		[JsonPropertyName("from")]
-		public int From { get; set; }
-
-		[JsonPropertyName("last_page")]
-		public int LastPage { get; set; }
-
-		[JsonPropertyName("per_page")]
-		public int PerPage { get; set; }
-
-		[JsonPropertyName("to")]
-		public int To { get; set; }
-
-		[JsonPropertyName("total")]
-		public int Total { get; set; }
+		[JsonPropertyName("results")]
+		public TData? Results { get; set; }
 	}
 	#endregion
 
@@ -493,4 +708,41 @@ public abstract class ApiClient
 
 	protected internal Uri Root(string resource)
 		=> new Uri(resource, UriKind.Relative);
+
+	string CombineRelativePaths(string parent, string child)
+	{
+		if (parent is { Length: > 0 } && child is { Length: > 0 })
+		{
+			return $"{parent.TrimEnd('/')}/{child.TrimStart('/')}";
+		}
+		else
+		{
+			return parent + child;
+		}
+	}
+
+	QueryString? BuildQuery(QueryString? query, int? page, int? size)
+	{
+		if (query.HasValue && page is null && size is null)
+		{
+			return query;
+		}
+
+		var builder = new QueryStringBuilder(query);
+		if (page.HasValue)
+		{
+			builder = builder.AddParameter("page", page.Value);
+		}
+		if (size.HasValue)
+		{
+			builder = builder.AddParameter("size", size.Value);
+		}
+
+		if (builder.HasQuery)
+		{
+			return builder.Build();
+		}
+
+		return default;
+	}
 }

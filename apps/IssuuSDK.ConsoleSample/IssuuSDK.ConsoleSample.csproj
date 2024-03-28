@@ -19,4 +19,8 @@
 		<Content Include="appsettings*.json" CopyToOutputDirectory="Always" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <ProjectReference Include="..\..\libs\IssuuSDK\IssuuSDK.csproj" />
+	</ItemGroup>
+
 </Project>
