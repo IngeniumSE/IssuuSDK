@@ -77,7 +77,7 @@ These settings, when enabled will capture the request and response content for e
 This SDK is open source and is available under the MIT license. Feel free to contribute to the project by submitting pull requests or issues.
 
 | Component | Authors | Website | License |
-|-|-|-|
+|-----------|---------|---------|---------|
 | .NET Platform | Microsoft and contributors | https://github.com/dotnet | MIT |
 | Ben.Demystifier | Ben Adams | https://github.com/benaadams/Ben.Demystifier | Apache V2 |
 | FluentValidation | Jeremy Skinner and contributors | https://github.com/FluentValidation/FluentValidation | Apache V2 |
