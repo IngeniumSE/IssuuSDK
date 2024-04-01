@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace IssuuSDK;
 
@@ -16,6 +17,7 @@ namespace IssuuSDK;
 /// <param name="statusCode">The HTTP status code returned.</param>
 /// <param name="meta">The paging metadata for the request, if available.</param>
 /// <param name="rateLimiting">The rate limiting metadata for the request, if available.</param>
+/// <param name="links">The set of links provided by the response.</param>
 /// <param name="error">The API error, if available.</param>
 [DebuggerDisplay("{ToDebuggerString(),nq}")]
 public class IssuuResponse(
@@ -25,6 +27,7 @@ public class IssuuResponse(
 	HttpStatusCode statusCode,
 	Meta? meta = default,
 	RateLimiting? rateLimiting = default,
+	Dictionary<string, string>? links = default,
 	Error? error = default)
 {
 	/// <summary>
@@ -36,6 +39,11 @@ public class IssuuResponse(
 	/// Gets the error.
 	/// </summary>
 	public Error? Error => error;
+
+	/// <summary>
+	/// Gets the available links.
+	/// </summary>
+	public Dictionary<string, string>? Links => links;
 
 	/// <summary>
 	/// Gets th metadata.
@@ -99,6 +107,7 @@ public class IssuuResponse(
 /// <param name="data">The API response data, if available.</param>
 /// <param name="meta">The paging metadata for the request, if available.</param>
 /// <param name="rateLimiting">The rate limiting metadata for the request, if available.</param>
+/// <param name="links">The set of links provided by the response.</param>
 /// <param name="error">The API error, if available.</param>
 /// <typeparam name="TData">The data type.</typeparam>
 public class IssuuResponse<TData>(
@@ -109,7 +118,8 @@ public class IssuuResponse<TData>(
 	TData? data = default,
 	Meta? meta = default,
 	RateLimiting? rateLimiting = default,
-	Error? error = default) : IssuuResponse(method, uri, isSuccess, statusCode, meta, rateLimiting, error)
+	Dictionary<string, string>? links = default,
+	Error? error = default) : IssuuResponse(method, uri, isSuccess, statusCode, meta, rateLimiting, links, error)
 	where TData : class
 {
 	/// <summary>
@@ -146,17 +156,17 @@ public class IssuuResponse<TData>(
 /// <param name="message">The error message.</param>
 /// <param name="errors">The set of additional error messages, these may be field specific.</param>
 /// <param name="exception">The exception that was caught.</param>
-public class Error(string message, Dictionary<string, string[]>? errors = null, Exception? exception = null)
+public class Error(string message, Dictionary<string, string>? errors = null, Exception? exception = null)
 {
 	/// <summary>
 	/// Gets the set of additional error messages, these may be field specific.
 	/// </summary>
-	public Dictionary<string, string[]>? Errors => errors;
+	public Dictionary<string, string>? Errors => errors;
 
 	/// <summary>
 	/// Gets the exception that was caught.
 	/// </summary>
-	public Exception? Exception => exception;
+	public Exception? Exception => exception?.Demystify();
 
 	/// <summary>
 	/// Gets the error message.

@@ -117,6 +117,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="ApiClient_DidntHandleErrorContent" xml:space="preserve">
+    <value>The error content returned from the Issuu V2 API was likely correct but this library couldn't process this.</value>
+  </data>
   <data name="ApiClient_NoErrorMessage" xml:space="preserve">
     <value>The Issuu V2 API did not return a successful response, but it also did not provide an error message.</value>
   </data>

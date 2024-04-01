@@ -58,3 +58,8 @@ public class LowerCaseNamingPolicy : JsonNamingPolicy
 
 	public override string ConvertName(string name) => name.ToLowerInvariant();
 }
+
+public class CamelCaseJsonStringEnumConverter : JsonStringEnumConverter
+{
+	public CamelCaseJsonStringEnumConverter() : base(JsonNamingPolicy.CamelCase) { }
+}

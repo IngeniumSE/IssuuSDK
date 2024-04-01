@@ -61,6 +61,15 @@ namespace IssuuSDK {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The error content returned from the Issuu V2 API was likely correct but this library couldn&apos;t process this..
+        /// </summary>
+        internal static string ApiClient_DidntHandleErrorContent {
+            get {
+                return ResourceManager.GetString("ApiClient_DidntHandleErrorContent", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The Issuu V2 API did not return a successful response, but it also did not provide an error message..
         /// </summary>
         internal static string ApiClient_NoErrorMessage {

@@ -11,5 +11,5 @@ public partial interface IIssuuApiClient
 public partial class IssuuApiClient : ApiClient, IIssuuApiClient
 {
 	public IssuuApiClient(HttpClient http, IssuuSettings settings)
-		: base(http, settings, settings.BaseUrl) { }
+		: base(http, settings) { }
 }

@@ -1,12 +1,14 @@
 ﻿// This work is licensed under the terms of the MIT license.
 // For a copy, see <https://opensource.org/licenses/MIT>.
 
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Resources;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 using IssuuSDK;
 
@@ -23,10 +25,12 @@ public abstract class ApiClient
 	readonly JsonSerializerOptions _deserializerOptions = JsonUtility.CreateDeserializerOptions();
 	readonly Uri _baseUrl;
 
-	protected ApiClient(HttpClient http, IssuuSettings settings, string baseUrl)
+	protected ApiClient(HttpClient http, IssuuSettings settings)
 	{
 		_http = Ensure.IsNotNull(http, nameof(http));
 		_settings = Ensure.IsNotNull(settings, nameof(settings));
+		_settings.Validate();
+
 		_baseUrl = new Uri(settings.BaseUrl);
 	}
 
@@ -294,7 +298,6 @@ public abstract class ApiClient
 				httpReq.Method,
 				httpReq.RequestUri,
 				httpResp,
-				request.Page,
 				cancellationToken)
 					.ConfigureAwait(false); ;
 
@@ -357,7 +360,6 @@ public abstract class ApiClient
 				httpReq.Method,
 				httpReq.RequestUri,
 				httpResp,
-				request.Page,
 				cancellationToken)
 					.ConfigureAwait(false); ;
 
@@ -462,31 +464,6 @@ public abstract class ApiClient
 		HttpResponseMessage response,
 		CancellationToken cancellationToken = default)
 	{
-		async Task<Error> GetIssuuError()
-		{
-			Error error;
-			if (response.Content is not null)
-			{
-				var result = await response.Content.ReadFromJsonAsync<ErrorContainer>(cancellationToken)
-					.ConfigureAwait(false);
-
-				if (result?.Message is not { Length: > 0 })
-				{
-					error = new(Resources.ApiClient_UnknownResponse, result?.Errors);
-				}
-				else
-				{
-					error = new(result.Message, result.Errors);
-				}
-			}
-			else
-			{
-				error = new Error(Resources.ApiClient_NoErrorMessage);
-			}
-
-			return error;
-		}
-
 		if (response.IsSuccessStatusCode)
 		{
 			return new IssuuResponse(
@@ -497,7 +474,7 @@ public abstract class ApiClient
 		}
 		else
 		{
-			Error? error = await GetIssuuError();
+			Error? error = await GetIssuuError(response, cancellationToken);
 
 			return new IssuuResponse(
 				method,
@@ -517,38 +494,13 @@ public abstract class ApiClient
 		CancellationToken cancellationToken = default)
 		where TResponse : class
 	{
-		async Task<Error> GetIssuuError()
-		{
-			Error error;
-			if (response.Content is not null)
-			{
-				var result = await response.Content.ReadFromJsonAsync<ErrorContainer>(
-					_deserializerOptions, cancellationToken)
-					.ConfigureAwait(false);
-
-				if (result?.Message is not { Length: > 0 })
-				{
-					error = new(Resources.ApiClient_UnknownResponse, result?.Errors);
-				}
-				else
-				{
-					error = new(result.Message, result.Errors);
-				}
-			}
-			else
-			{
-				error = new Error(Resources.ApiClient_NoErrorMessage);
-			}
-
-			return error;
-		}
-
 		var rateLimiting = GetRateLimiting(response);
 
 		if (response.IsSuccessStatusCode)
 		{
 			DataContainer<TResponse>? data = default;
 			Meta? meta = default;
+			Dictionary<string, string>? links = default;
 			if (response.Content is not null)
 			{
 				data = await response.Content.ReadFromJsonAsync<DataContainer<TResponse>>(
@@ -567,6 +519,15 @@ public abstract class ApiClient
 							TotalPages = (int)Math.Ceiling(data.Count.Value / (double)data.PageSize.Value)
 						};
 					}
+
+					if (data.Links is { Count: >0 })
+					{
+						links = new();
+						foreach (var link in data.Links)
+						{
+							links.Add(link.Key, link.Value.Href);
+						}
+					}
 				}
 			}
 
@@ -577,12 +538,13 @@ public abstract class ApiClient
 				response.StatusCode,
 				data: data?.Results,
 				meta: meta,
-				rateLimiting: rateLimiting
+				rateLimiting: rateLimiting,
+				links: links
 			);
 		}
 		else
 		{
-			Error? error = await GetIssuuError();
+			Error? error = await GetIssuuError(response, cancellationToken);
 
 			return new IssuuResponse<TResponse>(
 				method,
@@ -599,36 +561,9 @@ public abstract class ApiClient
 		HttpMethod method,
 		Uri uri,
 		HttpResponseMessage response,
-		int? page = null,
 		CancellationToken cancellationToken = default)
 		where TResponse : class
 	{
-		async Task<Error> GetIssuuError()
-		{
-			Error error;
-			if (response.Content is not null)
-			{
-				var result = await response.Content.ReadFromJsonAsync<ErrorContainer>(
-					_deserializerOptions, cancellationToken)
-					.ConfigureAwait(false);
-
-				if (result?.Message is not { Length: > 0 })
-				{
-					error = new(Resources.ApiClient_UnknownResponse, result?.Errors);
-				}
-				else
-				{
-					error = new(result.Message, result.Errors);
-				}
-			}
-			else
-			{
-				error = new Error(Resources.ApiClient_NoErrorMessage);
-			}
-
-			return error;
-		}
-
 		var rateLimiting = GetRateLimiting(response);
 
 		if (response.IsSuccessStatusCode)
@@ -652,7 +587,7 @@ public abstract class ApiClient
 		}
 		else
 		{
-			Error? error = await GetIssuuError();
+			Error? error = await GetIssuuError(response, cancellationToken);
 
 			return new IssuuResponse<TResponse>(
 				method,
@@ -663,6 +598,48 @@ public abstract class ApiClient
 				error: error
 			);
 		}
+	}
+
+	async Task<Error> GetIssuuError(HttpResponseMessage response, CancellationToken cancellationToken)
+	{
+		Error error;
+		if (response.Content is not null)
+		{
+			try
+			{
+				var result = await response.Content.ReadFromJsonAsync<ErrorContainer>(
+					_deserializerOptions, cancellationToken)
+					.ConfigureAwait(false);
+
+				Dictionary<string, string>? errorItems = null;
+				var content = result?.Details ?? result?.Fields;
+				if (content is { Count : >0 })
+				{
+					errorItems = content
+						.ToDictionary(x => x.Key, x => x.Value.Message);
+				}
+
+				if (result?.Message is not { Length: > 0 })
+				{
+
+					error = new(Resources.ApiClient_UnknownResponse, errorItems);
+				}
+				else
+				{
+					error = new(result.Message, errorItems);
+				}
+			}
+			catch (Exception ex)
+			{
+				error = new Error(Resources.ApiClient_DidntHandleErrorContent, exception: ex);
+			}
+		}
+		else
+		{
+			error = new Error(Resources.ApiClient_NoErrorMessage);
+		}
+
+		return error;
 	}
 
 	RateLimiting? GetRateLimiting(HttpResponseMessage response)
@@ -683,9 +660,18 @@ public abstract class ApiClient
 
 	class ErrorContainer
 	{
-		[JsonPropertyName("errors")]
-		public Dictionary<string, string[]>? Errors { get; set; }
+		[JsonPropertyName("fields")]
+		public Dictionary<string, ErrorMessageContainer>? Fields { get; set; }
 
+		[JsonPropertyName("details")]
+		public Dictionary<string, ErrorMessageContainer>? Details { get; set; }
+
+		[JsonPropertyName("message")]
+		public string Message { get; set; } = default!;
+	}
+
+	class ErrorMessageContainer
+	{
 		[JsonPropertyName("message")]
 		public string Message { get; set; } = default!;
 	}
@@ -700,6 +686,15 @@ public abstract class ApiClient
 
 		[JsonPropertyName("results")]
 		public TData? Results { get; set; }
+
+		[JsonPropertyName("links")]
+		public Dictionary<string, LinkContainer>? Links { get; set; }
+	}
+
+	class LinkContainer
+	{
+		[JsonPropertyName("href")]
+		public string Href { get; set; } = default!;
 	}
 	#endregion
 

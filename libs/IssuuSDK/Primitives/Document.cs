@@ -32,6 +32,12 @@ public class Document : Model<Document>
 	public DateTimeOffset Created { get; set; }
 
 	/// <summary>
+	/// Gets or sets the file ID.
+	/// </summary>
+	[JsonPropertyName("file")]
+	public long FileId { get; set; }
+
+	/// <summary>
 	/// Gets or sets the document file info.
 	/// </summary>
 	[JsonPropertyName("fileInfo")]

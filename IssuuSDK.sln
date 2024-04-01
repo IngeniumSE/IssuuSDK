@@ -51,9 +51,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{4ECCC480-8768-433D-8064-FEC3BA1D16A5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IssuuSDK.ConsoleSample", "apps\IssuuSDK.ConsoleSample\IssuuSDK.ConsoleSample.csproj", "{51DA3FE9-F207-4478-BC23-22CB55A22365}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "IssuuSDK.ConsoleSample", "apps\IssuuSDK.ConsoleSample\IssuuSDK.ConsoleSample.csproj", "{51DA3FE9-F207-4478-BC23-22CB55A22365}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IssuuSDK", "libs\IssuuSDK\IssuuSDK.csproj", "{758A0B86-53FF-4CF0-9F49-2F1330876569}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "IssuuSDK", "libs\IssuuSDK\IssuuSDK.csproj", "{758A0B86-53FF-4CF0-9F49-2F1330876569}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
