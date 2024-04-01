@@ -78,10 +78,10 @@ This SDK is open source and is available under the MIT license. Feel free to con
 
 | Component | Authors | Website | License |
 |-----------|---------|---------|---------|
-| .NET Platform | Microsoft and contributors | https://github.com/dotnet | MIT |
-| Ben.Demystifier | Ben Adams | https://github.com/benaadams/Ben.Demystifier | Apache V2 |
-| FluentValidation | Jeremy Skinner and contributors | https://github.com/FluentValidation/FluentValidation | Apache V2 |
-| MinVer | Adam Ralph and contributors | https://github.com/adamralph/minver | Apache V2 |
-| SlugGenerator | Artem Polishchuk | https://github.com/polischuk/SlugGenerator | MIT |
+| .NET Platform | Microsoft and contributors | [GitHub](https://github.com/dotnet) | MIT |
+| Ben.Demystifier | Ben Adams | [GitHub](https://github.com/benaadams/Ben.Demystifier) | Apache V2 |
+| FluentValidation | Jeremy Skinner and contributors | [GitHub](https://github.com/FluentValidation/FluentValidation) | Apache V2 |
+| MinVer | Adam Ralph and contributors | [GitHub](https://github.com/adamralph/minver) | Apache V2 |
+| SlugGenerator | Artem Polishchuk | [GitHub](https://github.com/polischuk/SlugGenerator) | MIT |
 
 By using this SDK, you agree to the terms of the MIT license used by this project, as well as the terms of the licenses of the components used by this SDK.
