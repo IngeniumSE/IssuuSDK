@@ -23,9 +23,9 @@ You can easily add the IssuuSDK to your project by referencing the NuGet package
 
 ```json
 {
-	"Issuu": {
-		"Token": "<token-value>"
-	}
+  "Issuu": {
+    "Token": "<token-value>"
+  }
 }
 ```
 
@@ -63,10 +63,10 @@ To aid in debugging results from the Issuu API, you can enable the following set
 
 ```json
 {
-	"Issuu": {
-		"CaptureRequestContent": true,
-		"CaptureResponseContent": true
-	}
+  "Issuu": {
+  "CaptureRequestContent": true,
+    "CaptureResponseContent": true
+  }
 }
 ```
 
@@ -76,8 +76,12 @@ These settings, when enabled will capture the request and response content for e
 
 This SDK is open source and is available under the MIT license. Feel free to contribute to the project by submitting pull requests or issues.
 
-- .NET Platform by Microsoft and contributors - https://github.com/dotnet
-- Ben.Demystifier by Ben Adams - https://github.com/benaadams/Ben.Demystifier
-- FluentValidation by the Jeremy Skinner and contributors - https://github.com/FluentValidation/FluentValidation
-- MinVer by Adam Ralph and contributors - https://github.com/adamralph/minver
-- SlugGenerator by Artem Polishchuk - https://github.com/polischuk/SlugGenerator
+| Component | Authors | Website | License |
+|-|-|-|
+| .NET Platform | Microsoft and contributors | https://github.com/dotnet | MIT |
+| Ben.Demystifier | Ben Adams | https://github.com/benaadams/Ben.Demystifier | Apache V2 |
+| FluentValidation | Jeremy Skinner and contributors | https://github.com/FluentValidation/FluentValidation | Apache V2 |
+| MinVer | Adam Ralph and contributors | https://github.com/adamralph/minver | Apache V2 |
+| SlugGenerator | Artem Polishchuk | https://github.com/polischuk/SlugGenerator | MIT |
+
+By using this SDK, you agree to the terms of the MIT license used by this project, as well as the terms of the licenses of the components used by this SDK.

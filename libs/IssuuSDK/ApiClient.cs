@@ -42,7 +42,7 @@ public abstract class ApiClient
 		CancellationToken cancellationToken = default)
 	{
 		Ensure.IsNotNull(request, nameof(request));
-		var httpReq = CreateHttpRequest(request);
+		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
 		try
@@ -93,6 +93,10 @@ public abstract class ApiClient
 
 			return response;
 		}
+		finally
+		{
+			httpReq?.Dispose();
+		}
 	}
 
 	protected internal async Task<IssuuResponse> SendAsync<TRequest>(
@@ -101,7 +105,7 @@ public abstract class ApiClient
 		where TRequest : notnull
 	{
 		Ensure.IsNotNull(request, nameof(request));
-		var httpReq = CreateHttpRequest(request);
+		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
 		try
@@ -151,6 +155,10 @@ public abstract class ApiClient
 
 			return response;
 		}
+		finally
+		{
+			httpReq?.Dispose();
+		}
 	}
 	#endregion
 
@@ -161,7 +169,7 @@ public abstract class ApiClient
 		where TResponse : class
 	{
 		Ensure.IsNotNull(request, nameof(request));
-		var httpReq = CreateHttpRequest(request);
+		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
 		try
@@ -213,6 +221,10 @@ public abstract class ApiClient
 			}
 
 			return response;
+		}
+		finally
+		{
+			httpReq?.Dispose();
 		}
 	}
 
@@ -223,7 +235,7 @@ public abstract class ApiClient
 		where TResponse : class
 	{
 		Ensure.IsNotNull(request, nameof(request));
-		var httpReq = CreateHttpRequest(request);
+		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
 		try
@@ -275,6 +287,10 @@ public abstract class ApiClient
 			}
 
 			return response;
+		}
+		finally
+		{
+			httpReq?.Dispose();
 		}
 	}
 	#endregion
@@ -286,7 +302,7 @@ public abstract class ApiClient
 		where TResponse : class
 	{
 		Ensure.IsNotNull(request, nameof(request));
-		var httpReq = CreateHttpRequest(request);
+		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
 		try
@@ -337,6 +353,10 @@ public abstract class ApiClient
 			}
 
 			return response;
+		}
+		finally
+		{
+			httpReq?.Dispose();
 		}
 	}
 
@@ -348,7 +368,7 @@ public abstract class ApiClient
 		where TResponse : class
 	{
 		Ensure.IsNotNull(request, nameof(request));
-		var httpReq = CreateHttpRequest(request);
+		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
 		try
@@ -399,6 +419,10 @@ public abstract class ApiClient
 			}
 
 			return response;
+		}
+		finally
+		{
+			httpReq?.Dispose();
 		}
 	}
 	#endregion
@@ -435,7 +459,19 @@ public abstract class ApiClient
 
 			if (request.FilePath is not null)
 			{
-				content.Add(new StreamContent(new FileStream(request.FilePath, FileMode.Open)), "file", Path.GetFileName(request.FilePath));
+				string fileName = request.FileName is { Length: >0 } ? request.FileName : Path.GetFileName(request.FilePath);
+
+				content.Add(
+					new StreamContent(new FileStream(request.FilePath, FileMode.Open)),
+					"file",
+					fileName);
+			}
+			else if (request.FileStream is not null)
+			{
+				content.Add(
+					new StreamContent(request.FileStream),
+					"file",
+					request.FileName);
 			}
 
 			message.Content = content;

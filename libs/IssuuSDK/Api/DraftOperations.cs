@@ -108,6 +108,23 @@ public partial interface IDraftOperations
 	Task<IssuuResponse<Document>> UploadDocumentContentAsync(
 		string slug,
 		string filePath,
+		string? fileName = null,
+		bool confirmCopyright = false,
+		CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Uploads file content to attach to a draft.
+	/// HTTP PATH /drafts/{slug}/upload
+	/// </summary>
+	/// <param name="slug">The document slug.</param>
+	/// <param name="fileStream">The stream containing file content.</param>
+	/// <param name="confirmCopyright">Has confirmation of copyright be applied?</param>
+	/// <param name="cancellationToken">The cancellation token.</param>
+	/// <returns>The Issuu response.</returns>
+	Task<IssuuResponse<Document>> UploadDocumentContentAsync(
+		string slug,
+		Stream fileStream,
+		string fileName,
 		bool confirmCopyright = false,
 		CancellationToken cancellationToken = default);
 }
@@ -193,10 +210,12 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 	public async Task<IssuuResponse<Document>> UploadDocumentContentAsync(
 		string slug,
 		string filePath,
+		string? fileName = null,
 		bool confirmCopyright = false,
 		CancellationToken cancellationToken = default)
 	{
 		Ensure.IsNotNullOrEmpty(slug, nameof(slug));
+		Ensure.IsNotNullOrEmpty(filePath, nameof(filePath));
 
 		var request = new IssuuRequest(
 			new HttpMethod("PATCH"), path + $"/{slug}/upload",
@@ -205,7 +224,32 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 			{
 				["confirmCopyright"] = confirmCopyright ? "true" : "false"
 			},
+			fileName: fileName,
 			filePath: filePath);
+
+		return await client.FetchSingleAsync<Document>(request, cancellationToken);
+	}
+
+	public async Task<IssuuResponse<Document>> UploadDocumentContentAsync(
+		string slug,
+		Stream fileStream,
+		string fileName,
+		bool confirmCopyright = false,
+		CancellationToken cancellationToken = default)
+	{
+		Ensure.IsNotNullOrEmpty(slug, nameof(slug));
+		Ensure.IsNotNull(fileStream, nameof(fileStream));
+		Ensure.IsNotNullOrEmpty(fileName, nameof(fileName));
+
+		var request = new IssuuRequest(
+			new HttpMethod("PATCH"), path + $"/{slug}/upload",
+			useMultipartContent: true,
+			formData: new()
+			{
+				["confirmCopyright"] = confirmCopyright ? "true" : "false"
+			},
+			fileName: fileName,
+			fileStream: fileStream);
 
 		return await client.FetchSingleAsync<Document>(request, cancellationToken);
 	}

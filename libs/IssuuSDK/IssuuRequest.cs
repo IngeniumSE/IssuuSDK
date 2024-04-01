@@ -12,6 +12,8 @@ namespace IssuuSDK;
 /// <param name="page">The current page (if applicable).</param>
 /// <param name="size">The size of the page (if applicable).</param>
 /// <param name="filePath">The file path for upload.</param>
+/// <param name="fileStream">The stream containing file content.</param>
+/// <param name="fileName">The file name for the uploaded content.</param>
 /// <param name="formData">The form data.</param>
 /// <param name="useMultipartContent">Use multipart file content for upload</param>
 public class IssuuRequest(
@@ -21,13 +23,25 @@ public class IssuuRequest(
 	int? page = null,
 	int? size = null,
 	string? filePath = null,
+	Stream? fileStream = null,
+	string? fileName = null,
 	Dictionary<string, string?>? formData = null,
 	bool useMultipartContent = false)
 {
 	/// <summary>
+	/// Gets the file name of an upload.
+	/// </summary>
+	public string? FileName => fileName;
+
+	/// <summary>
 	/// Gets the file path of an upload.
 	/// </summary>
 	public string? FilePath => filePath;
+
+	/// <summary>
+	/// Gets the file stream of an upload.
+	/// </summary>
+	public Stream? FileStream => fileStream;
 
 	/// <summary>
 	/// Gets the form data.
