@@ -7,7 +7,19 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>IssuuSDK</RootNamespace>
 		<ImplicitPackageReferences>false</ImplicitPackageReferences>
+		<Title>IssuuSDK</Title>
+		<Authors>IngeniumSoftwareDev</Authors>
+		<Company>Ingenium Software Development</Company>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://github.com/IngeniumSE/IssuuSDK</PackageProjectUrl>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Include="..\..\README.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Ben.Demystifier" />
@@ -38,5 +50,14 @@
 	    <LastGenOutput>Resources.Designer.cs</LastGenOutput>
 	  </EmbeddedResource>
 	</ItemGroup>
+
+	<Target Name="PreparePackageReleaseNotesFromFile" BeforeTargets="GenerateNuspec">
+		<ReadLinesFromFile File="../../CHANGELOG.md">
+			<Output TaskParameter="Lines" ItemName="ReleaseNoteLines" />
+		</ReadLinesFromFile>
+		<PropertyGroup>
+			<PackageReleaseNotes>@(ReleaseNoteLines, '%0a')</PackageReleaseNotes>
+		</PropertyGroup>
+	</Target>
 
 </Project>
