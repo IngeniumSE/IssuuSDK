@@ -30,7 +30,14 @@ The IssuuSDK does not currently support generating authentication tokens. To gen
 
 :::
 
-For a complete list of available settings, please [click here](/docs/reference/settings)
+The app configuration is mapped to the `IssuuSettings` type, which supports the following properties:
+
+| Property | Type | Default Value | Notes |
+| --- | --- | --- | --- |
+| `Token` | `string` | `null` | Your authentication token |
+| `BaseUrl` | `string` | https://api.issuu.com/v2 | The base URL for the Issuu API |
+| `CaptureRequestContent` | `bool` | `false` | If enabled, each request will capture the request content |
+| `CaptureResponseContent` | `bool` | `false` | If enabled, each request will capture the response content |
 
 ### Service registration
 To add IssuuSDK services to your Dependency Injection container, you need to add a call to `AddIssuu()` to your `IServiceCollection`. There are a few _flavours_ of a .NET app, so you'll need to decide which one you are using
