@@ -137,7 +137,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 
 		var request = new IssuuRequest(HttpMethod.Delete, path + $"/{slug}");
 
-		return await client.SendAsync(request, cancellationToken);
+		return await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document>> GetPublicationAsync(
@@ -148,7 +148,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 
 		var request = new IssuuRequest(HttpMethod.Get, path + $"/{slug}");
 
-		return await client.FetchSingleAsync<Document>(request, cancellationToken);
+		return await client.FetchSingleAsync<Document>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<AssetResult[]>> GetPublicationAssetsAsync(
@@ -183,10 +183,10 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 
 		if (assetType != AssetType.Cover)
 		{
-			return await client.FetchManyAsync<AssetResult[]>(request, cancellationToken);
+			return await client.FetchManyAsync<AssetResult[]>(request, cancellationToken).ConfigureAwait(false);
 		}
 
-		var result = await client.FetchManyAsync<AssetResult[][]>(request, cancellationToken);
+		var result = await client.FetchManyAsync<AssetResult[][]>(request, cancellationToken).ConfigureAwait(false);
 
 		var data = result.Data is { Length: > 0 } ? result.Data[0] : null;
 
@@ -230,7 +230,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 			path + $"/{slug}/embed",
 			query: query);
 
-		return await client.FetchSingleAsync<EmbedResult>(request, cancellationToken);
+		return await client.FetchSingleAsync<EmbedResult>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<ShareResult>> GetPublicationFullScreenShareAsync(
@@ -245,7 +245,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 			path + $"/{slug}/fullscreen",
 			settings ?? new());
 
-		return await client.FetchSingleAsync<DisplaySettings, ShareResult>(request, cancellationToken);
+		return await client.FetchSingleAsync<DisplaySettings, ShareResult>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<ShareResult>> GetPublicationReaderShareAsync(
@@ -258,7 +258,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 			HttpMethod.Get,
 			path + $"/{slug}/reader");
 
-		return await client.FetchSingleAsync<ShareResult>(request, cancellationToken);
+		return await client.FetchSingleAsync<ShareResult>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<QrShareResult>> GetPublicationQrCodeAsync(
@@ -273,7 +273,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 			path + $"/{slug}/qrcode",
 			settings ?? new());
 
-		return await client.FetchSingleAsync<QrDisplaySettings, QrShareResult>(request, cancellationToken);
+		return await client.FetchSingleAsync<QrDisplaySettings, QrShareResult>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document[]>> GetPublicationsAsync(
@@ -283,7 +283,7 @@ public class PublicationOperations(PathString path, ApiClient client) : IPublica
 	{
 		var request = new IssuuRequest(HttpMethod.Get, path, page: page, size: size);
 
-		return await client.FetchManyAsync<Document[]>(request, cancellationToken);
+		return await client.FetchManyAsync<Document[]>(request, cancellationToken).ConfigureAwait(false);
 	}
 }
 

@@ -137,7 +137,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 	{
 		var request = new IssuuRequest<Draft>(HttpMethod.Post, path, draft);
 
-		return await client.FetchSingleAsync<Draft, Document>(request, cancellationToken);
+		return await client.FetchSingleAsync<Draft, Document>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse> DeleteDraftAsync(
@@ -148,7 +148,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 
 		var request = new IssuuRequest(HttpMethod.Delete, path + $"/{slug}");
 
-		return await client.SendAsync(request, cancellationToken);
+		return await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document>> GetDraftAsync(
@@ -159,7 +159,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 
 		var request = new IssuuRequest(HttpMethod.Get, path + $"/{slug}");
 
-		return await client.FetchSingleAsync<Document>(request, cancellationToken);
+		return await client.FetchSingleAsync<Document>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document[]>> GetDraftsAsync(
@@ -169,7 +169,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 	{
 		var request = new IssuuRequest(HttpMethod.Get, path, page: page, size: size);
 
-		return await client.FetchManyAsync<Document[]>(request, cancellationToken);
+		return await client.FetchManyAsync<Document[]>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<PublishResult>> PublishDraftAsync(
@@ -192,7 +192,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 				DesiredName = desiredName
 			});
 
-		return await client.FetchSingleAsync<PublishRequest, PublishResult>(request, cancellationToken);
+		return await client.FetchSingleAsync<PublishRequest, PublishResult>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document>> UpdateDraftAsync(
@@ -204,7 +204,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 
 		var request = new IssuuRequest<Draft>(new HttpMethod("PATCH"), path + $"/{slug}", draft);
 
-		return await client.FetchSingleAsync<Draft, Document>(request, cancellationToken);
+		return await client.FetchSingleAsync<Draft, Document>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document>> UploadDocumentContentAsync(
@@ -227,7 +227,7 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 			fileName: fileName,
 			filePath: filePath);
 
-		return await client.FetchSingleAsync<Document>(request, cancellationToken);
+		return await client.FetchSingleAsync<Document>(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IssuuResponse<Document>> UploadDocumentContentAsync(
@@ -251,6 +251,6 @@ public class DraftOperations(PathString path, ApiClient client) : IDraftOperatio
 			fileName: fileName,
 			fileStream: fileStream);
 
-		return await client.FetchSingleAsync<Document>(request, cancellationToken);
+		return await client.FetchSingleAsync<Document>(request, cancellationToken).ConfigureAwait(false);
 	}
 }

@@ -1,23 +1,73 @@
 ﻿// This work is licensed under the terms of the MIT license.
 // For a copy, see <https://opensource.org/licenses/MIT>.
 
-using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Resources;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 
-using IssuuSDK;
-
 namespace IssuuSDK;
+
+/// <summary>
+/// Defines the contract for an API client.
+/// </summary>
+public interface IApiClient
+{
+	/// <summary>
+	/// Sends the specified request to the Issuu API.
+	/// </summary>
+	/// <param name="request">The Issuu request.</param>
+	/// <param name="cancellationToken">The cancellation token.</param>
+	/// <returns>The Issuu response.</returns>
+	Task<IssuuResponse> SendAsync(
+		IssuuRequest request,
+		CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Sends the specified request to the Issuu API.
+	/// </summary>
+	/// <param name="request">The Issuu request.</param>
+	/// <param name="cancellationToken">The cancellation token.</param>
+	/// <returns>The Issuu response.</returns>
+	Task<IssuuResponse> SendAsync<TData>(
+		IssuuRequest<TData> request,
+		CancellationToken cancellationToken = default)
+		where TData : notnull;
+
+	/// <summary>
+	/// Sends the specified request to the Issuu API and returns the response data.
+	/// </summary>
+	/// <param name="request">The Issuu request.</param>
+	/// <param name="responseFactory">The response data factory.</param>
+	/// <param name="cancellationToken">The cancellation token.</param>
+	/// <returns>The Issuu response.</returns>
+	Task<IssuuResponse<TData>> FetchAsync<TData>(
+		IssuuRequest request,
+		MapResponse<TData> responseFactory,
+		CancellationToken cancellationToken = default)
+		where TData : class;
+
+	/// <summary>
+	/// Sends the specified request to the Issuu API and returns the response data.
+	/// </summary>
+	/// <param name="request">The Issuu request.</param>
+	/// <param name="responseFactory">The response data factory.</param>
+	/// <param name="cancellationToken">The cancellation token.</param>
+	/// <returns>The Issuu response.</returns>
+	Task<IssuuResponse<TResponseData>> FetchAsync<TRequestData, TResponseData>(
+		IssuuRequest<TRequestData> request,
+		MapResponse<TResponseData> responseFactory,
+		CancellationToken cancellationToken = default)
+		where TRequestData : notnull
+		where TResponseData : class;
+}
 
 /// <summary>
 /// Provides a base implementation of an API client.
 /// </summary>
-public abstract class ApiClient
+public abstract class ApiClient : IApiClient
 {
 	readonly HttpClient _http;
 	readonly IssuuSettings _settings;
@@ -37,7 +87,7 @@ public abstract class ApiClient
 	#region Send and Fetch
 
 	#region Send
-	protected internal async Task<IssuuResponse> SendAsync(
+	public async Task<IssuuResponse> SendAsync(
 		IssuuRequest request,
 		CancellationToken cancellationToken = default)
 	{
@@ -56,42 +106,13 @@ public abstract class ApiClient
 				httpResp)
 				.ConfigureAwait(false);
 
-			if (_settings.CaptureRequestContent && httpReq.Content is not null)
-			{
-				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (_settings.CaptureResponseContent && httpResp.Content is not null)
-			{
-				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
+			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
 
 			return transformedResponse;
 		}
 		catch (Exception ex)
 		{
-			var response = new IssuuResponse(
-				httpReq.Method,
-				httpReq.RequestUri,
-				false,
-				(HttpStatusCode)0,
-				error: new Error(ex.Message, exception: ex));
-
-			if (httpReq?.Content is not null)
-			{
-				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (httpResp?.Content is not null)
-			{
-				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			return response;
+			return await GetIssuuErrorResponse(httpReq, httpResp, ex).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -99,7 +120,7 @@ public abstract class ApiClient
 		}
 	}
 
-	protected internal async Task<IssuuResponse> SendAsync<TRequest>(
+	public async Task<IssuuResponse> SendAsync<TRequest>(
 		IssuuRequest<TRequest> request,
 		CancellationToken cancellationToken = default)
 		where TRequest : notnull
@@ -110,50 +131,98 @@ public abstract class ApiClient
 
 		try
 		{
-			httpResp = await _http.SendAsync(httpReq, cancellationToken);
+			httpResp = await _http.SendAsync(httpReq, cancellationToken).ConfigureAwait(false);
 
 			var transformedResponse = await TransformResponse(
 				httpReq.Method,
 				httpReq.RequestUri,
 				httpResp)
-					.ConfigureAwait(false); ;
+				.ConfigureAwait(false);
 
-			if (_settings.CaptureRequestContent && httpReq.Content is not null)
-			{
-				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (_settings.CaptureResponseContent && httpResp.Content is not null)
-			{
-				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
+			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
 
 			return transformedResponse;
 		}
 		catch (Exception ex)
 		{
-			var response = new IssuuResponse(
+			return await GetIssuuErrorResponse(httpReq, httpResp, ex).ConfigureAwait(false);
+		}
+		finally
+		{
+			httpReq?.Dispose();
+		}
+	}
+	#endregion
+
+	#region Fetch
+	public async Task<IssuuResponse<TData>> FetchAsync<TData>(
+		IssuuRequest request,
+		MapResponse<TData> mapper,
+		CancellationToken cancellationToken = default)
+		where TData : class
+	{
+		Ensure.IsNotNull(request, nameof(request));
+		using var httpReq = CreateHttpRequest(request);
+		HttpResponseMessage? httpResp = null;
+
+		try
+		{
+			httpResp = await _http.SendAsync(httpReq, cancellationToken)
+				.ConfigureAwait(false);
+
+			var transformedResponse = await TransformResponse(
 				httpReq.Method,
 				httpReq.RequestUri,
-				false,
-				(HttpStatusCode)0,
-				error: new Error(ex.Message, exception: ex));
+				httpResp,
+				mapper,
+				cancellationToken)
+				.ConfigureAwait(false);
 
-			if (httpReq?.Content is not null)
-			{
-				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
+			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
 
-			if (httpResp?.Content is not null)
-			{
-				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
+			return transformedResponse;
+		}
+		catch (Exception ex)
+		{
+			return await GetIssuuErrorResponse<TData>(httpReq, httpResp, ex).ConfigureAwait(false);
+		}
+		finally
+		{
+			httpReq?.Dispose();
+		}
+	}
 
-			return response;
+	public async Task<IssuuResponse<TResponseData>> FetchAsync<TRequestData, TResponseData>(
+		IssuuRequest<TRequestData> request,
+		MapResponse<TResponseData> mapper,
+		CancellationToken cancellationToken = default)
+		where TRequestData : notnull
+		where TResponseData : class
+	{
+		Ensure.IsNotNull(request, nameof(request));
+		using var httpReq = CreateHttpRequest(request);
+		HttpResponseMessage? httpResp = null;
+
+		try
+		{
+			httpResp = await _http.SendAsync(httpReq, cancellationToken)
+				.ConfigureAwait(false);
+
+			var transformedResponse = await TransformResponse(
+				httpReq.Method,
+				httpReq.RequestUri,
+				httpResp,
+				mapper,
+				cancellationToken)
+				.ConfigureAwait(false);
+
+			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
+
+			return transformedResponse;
+		}
+		catch (Exception ex)
+		{
+			return await GetIssuuErrorResponse<TResponseData>(httpReq, httpResp, ex).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -168,64 +237,15 @@ public abstract class ApiClient
 		CancellationToken cancellationToken = default)
 		where TResponse : class
 	{
-		Ensure.IsNotNull(request, nameof(request));
-		using var httpReq = CreateHttpRequest(request);
-		HttpResponseMessage? httpResp = null;
+		var response = await FetchAsync(request, MapMany<TResponse>, cancellationToken)
+			.ConfigureAwait(false);
 
-		try
+		if (response.Meta is not null)
 		{
-			httpResp = await _http.SendAsync(httpReq, cancellationToken)
-				.ConfigureAwait(false);
-
-			var transformedResponse = await TransformManyResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				httpResp,
-				request.Page,
-				cancellationToken)
-					.ConfigureAwait(false); ;
-
-			if (_settings.CaptureRequestContent && httpReq.Content is not null)
-			{
-				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			if (_settings.CaptureResponseContent && httpResp.Content is not null)
-			{
-				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			return transformedResponse;
+			response.Meta.Page = request.Page.GetValueOrDefault(1);
 		}
-		catch (Exception ex)
-		{
-			var response = new IssuuResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				false,
-				(HttpStatusCode)0,
-				error: new Error(ex.Message, exception: ex));
 
-			if (httpReq?.Content is not null)
-			{
-				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (httpResp?.Content is not null)
-			{
-				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			return response;
-		}
-		finally
-		{
-			httpReq?.Dispose();
-		}
+		return response;
 	}
 
 	protected internal async Task<IssuuResponse<TResponse>> FetchManyAsync<TRequest, TResponse>(
@@ -234,197 +254,31 @@ public abstract class ApiClient
 		where TRequest : notnull
 		where TResponse : class
 	{
-		Ensure.IsNotNull(request, nameof(request));
-		using var httpReq = CreateHttpRequest(request);
-		HttpResponseMessage? httpResp = null;
+		var response = await FetchAsync(request, MapMany<TResponse>, cancellationToken)
+			.ConfigureAwait(false);
 
-		try
+		if (response.Meta is not null)
 		{
-			httpResp = await _http.SendAsync(httpReq, cancellationToken)
-				.ConfigureAwait(false);
-
-			var transformedResponse = await TransformManyResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				httpResp,
-				request.Page,
-				cancellationToken)
-					.ConfigureAwait(false); ;
-
-			if (_settings.CaptureRequestContent && httpReq.Content is not null)
-			{
-				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (_settings.CaptureResponseContent && httpResp.Content is not null)
-			{
-				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			return transformedResponse;
+			response.Meta.Page = request.Page.GetValueOrDefault(1);
 		}
-		catch (Exception ex)
-		{
-			var response = new IssuuResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				false,
-				(HttpStatusCode)0,
-				error: new Error(ex.Message, exception: ex));
 
-			if (httpReq?.Content is not null)
-			{
-				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (httpResp?.Content is not null)
-			{
-				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			return response;
-		}
-		finally
-		{
-			httpReq?.Dispose();
-		}
+		return response;
 	}
 	#endregion
 
 	#region Fetch Single
-	protected internal async Task<IssuuResponse<TResponse>> FetchSingleAsync<TResponse>(
+	protected internal Task<IssuuResponse<TResponse>> FetchSingleAsync<TResponse>(
 		IssuuRequest request,
 		CancellationToken cancellationToken = default)
 		where TResponse : class
-	{
-		Ensure.IsNotNull(request, nameof(request));
-		using var httpReq = CreateHttpRequest(request);
-		HttpResponseMessage? httpResp = null;
+		=> FetchAsync(request, MapSingle<TResponse>, cancellationToken);
 
-		try
-		{
-			httpResp = await _http.SendAsync(httpReq, cancellationToken)
-				.ConfigureAwait(false);
-
-			var transformedResponse = await TransformSingleResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				httpResp,
-				cancellationToken)
-					.ConfigureAwait(false); ;
-
-			if (_settings.CaptureRequestContent && httpReq.Content is not null)
-			{
-				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			if (_settings.CaptureResponseContent && httpResp.Content is not null)
-			{
-				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			return transformedResponse;
-		}
-		catch (Exception ex)
-		{
-			var response = new IssuuResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				false,
-				(HttpStatusCode)0,
-				error: new Error(ex.Message, exception: ex));
-
-			if (httpReq?.Content is not null)
-			{
-				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (httpResp?.Content is not null)
-			{
-				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			return response;
-		}
-		finally
-		{
-			httpReq?.Dispose();
-		}
-	}
-
-
-	protected internal async Task<IssuuResponse<TResponse>> FetchSingleAsync<TRequest, TResponse>(
+	protected internal Task<IssuuResponse<TResponse>> FetchSingleAsync<TRequest, TResponse>(
 		IssuuRequest<TRequest> request,
 		CancellationToken cancellationToken = default)
 		where TRequest : notnull
 		where TResponse : class
-	{
-		Ensure.IsNotNull(request, nameof(request));
-		using var httpReq = CreateHttpRequest(request);
-		HttpResponseMessage? httpResp = null;
-
-		try
-		{
-			httpResp = await _http.SendAsync(httpReq, cancellationToken)
-				.ConfigureAwait(false);
-
-			var transformedResponse = await TransformSingleResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				httpResp,
-				cancellationToken)
-					.ConfigureAwait(false); ;
-
-			if (_settings.CaptureRequestContent && httpReq.Content is not null)
-			{
-				transformedResponse.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (_settings.CaptureResponseContent && httpResp.Content is not null)
-			{
-				transformedResponse.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			return transformedResponse;
-		}
-		catch (Exception ex)
-		{
-			var response = new IssuuResponse<TResponse>(
-				httpReq.Method,
-				httpReq.RequestUri,
-				false,
-				(HttpStatusCode)0,
-				error: new Error(ex.Message, exception: ex));
-
-			if (httpReq?.Content is not null)
-			{
-				response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-					.ConfigureAwait(false);
-			}
-
-			if (httpResp?.Content is not null)
-			{
-				response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
-					.ConfigureAwait(false); ;
-			}
-
-			return response;
-		}
-		finally
-		{
-			httpReq?.Dispose();
-		}
-	}
+		=> FetchAsync(request, MapSingle<TResponse>, cancellationToken);
 	#endregion
 
 	#endregion
@@ -459,7 +313,7 @@ public abstract class ApiClient
 
 			if (request.FilePath is not null)
 			{
-				string fileName = request.FileName is { Length: >0 } ? request.FileName : Path.GetFileName(request.FilePath);
+				string fileName = request.FileName is { Length: > 0 } ? request.FileName : Path.GetFileName(request.FilePath);
 
 				content.Add(
 					new StreamContent(new FileStream(request.FilePath, FileMode.Open)),
@@ -500,140 +354,123 @@ public abstract class ApiClient
 		HttpResponseMessage response,
 		CancellationToken cancellationToken = default)
 	{
+		var rateLimiting = GetRateLimiting(response);
+
 		if (response.IsSuccessStatusCode)
 		{
 			return new IssuuResponse(
 				method,
 				uri,
 				response.IsSuccessStatusCode,
-				response.StatusCode);
-		}
-		else
-		{
-			Error? error = await GetIssuuError(response, cancellationToken);
-
-			return new IssuuResponse(
-				method,
-				uri,
-				response.IsSuccessStatusCode,
 				response.StatusCode,
-				error: error
-			);
-		}
-	}
-
-	protected internal async Task<IssuuResponse<TResponse>> TransformManyResponse<TResponse>(
-		HttpMethod method,
-		Uri uri,
-		HttpResponseMessage response,
-		int? page = null,
-		CancellationToken cancellationToken = default)
-		where TResponse : class
-	{
-		var rateLimiting = GetRateLimiting(response);
-
-		if (response.IsSuccessStatusCode)
-		{
-			DataContainer<TResponse>? data = default;
-			Meta? meta = default;
-			Dictionary<string, string>? links = default;
-			if (response.Content is not null)
-			{
-				data = await response.Content.ReadFromJsonAsync<DataContainer<TResponse>>(
-					_deserializerOptions, cancellationToken)
-					.ConfigureAwait(false);
-
-				if (data is not null)
-				{
-					if (data.Count.HasValue && data.PageSize.HasValue)
-					{
-						meta = new()
-						{
-							Page = page ?? 1,
-							PageSize = data.PageSize.Value,
-							TotalItems = data.Count.Value,
-							TotalPages = (int)Math.Ceiling(data.Count.Value / (double)data.PageSize.Value)
-						};
-					}
-
-					if (data.Links is { Count: >0 })
-					{
-						links = new();
-						foreach (var link in data.Links)
-						{
-							links.Add(link.Key, link.Value.Href);
-						}
-					}
-				}
-			}
-
-			return new IssuuResponse<TResponse>(
-				method,
-				uri,
-				response.IsSuccessStatusCode,
-				response.StatusCode,
-				data: data?.Results,
-				meta: meta,
-				rateLimiting: rateLimiting,
-				links: links
-			);
-		}
-		else
-		{
-			Error? error = await GetIssuuError(response, cancellationToken);
-
-			return new IssuuResponse<TResponse>(
-				method,
-				uri,
-				response.IsSuccessStatusCode,
-				response.StatusCode,
-				rateLimiting: rateLimiting,
-				error: error
-			);
-		}
-	}
-
-	protected internal async Task<IssuuResponse<TResponse>> TransformSingleResponse<TResponse>(
-		HttpMethod method,
-		Uri uri,
-		HttpResponseMessage response,
-		CancellationToken cancellationToken = default)
-		where TResponse : class
-	{
-		var rateLimiting = GetRateLimiting(response);
-
-		if (response.IsSuccessStatusCode)
-		{
-			TResponse? data = null;
-			if (response.Content is not null)
-			{
-				data = await response.Content.ReadFromJsonAsync<TResponse>(
-					_deserializerOptions, cancellationToken)
-					.ConfigureAwait(false);
-			}
-
-			return new IssuuResponse<TResponse>(
-				method,
-				uri,
-				response.IsSuccessStatusCode,
-				response.StatusCode,
-				data: data,
 				rateLimiting: rateLimiting
 			);
 		}
 		else
 		{
-			Error? error = await GetIssuuError(response, cancellationToken);
+			Error? error = await GetIssuuError(response, cancellationToken).ConfigureAwait(false);
 
-			return new IssuuResponse<TResponse>(
+			return new IssuuResponse(
 				method,
 				uri,
 				response.IsSuccessStatusCode,
 				response.StatusCode,
-				rateLimiting: rateLimiting,
-				error: error
+				error: error,
+				rateLimiting: rateLimiting
 			);
 		}
+	}
+
+	protected internal async Task<IssuuResponse<TData>> TransformResponse<TData>(
+		HttpMethod method,
+		Uri uri,
+		HttpResponseMessage response,
+		MapResponse<TData> mapper,
+		CancellationToken cancellationToken = default)
+		where TData : class
+	{
+		var rateLimiting = GetRateLimiting(response);
+
+		if (response.IsSuccessStatusCode)
+		{
+			var mapped = await mapper(response, cancellationToken).ConfigureAwait(false);
+
+			return new IssuuResponse<TData>(
+				method,
+				uri,
+				response.IsSuccessStatusCode,
+				response.StatusCode,
+				data: mapped?.Data,
+				meta: mapped?.Meta,
+				rateLimiting: rateLimiting,
+				links: mapped?.Links
+			);
+		}
+		else
+		{
+			Error? error = await GetIssuuError(response, cancellationToken).ConfigureAwait(false);
+
+			return new IssuuResponse<TData>(
+				method,
+				uri,
+				response.IsSuccessStatusCode,
+				response.StatusCode,
+				error: error,
+				rateLimiting: rateLimiting
+			);
+		}
+	}
+
+	async Task<MappedResponse<TResponse>> MapMany<TResponse>(HttpResponseMessage response, CancellationToken cancellationToken)
+		where TResponse : class
+	{
+		DataContainer<TResponse>? data = default;
+		Meta? meta = default;
+		Dictionary<string, string>? links = default;
+		if (response.Content is not null)
+		{
+			data = await response.Content.ReadFromJsonAsync<DataContainer<TResponse>>(
+				_deserializerOptions, cancellationToken)
+				.ConfigureAwait(false);
+
+			if (data is not null)
+			{
+				if (data.Count.HasValue && data.PageSize.HasValue)
+				{
+					meta = new()
+					{
+						PageSize = data.PageSize.Value,
+						TotalItems = data.Count.Value,
+						TotalPages = (int)Math.Ceiling(data.Count.Value / (double)data.PageSize.Value)
+					};
+				}
+
+				if (data.Links is { Count: > 0 })
+				{
+					links = new();
+					foreach (var link in data.Links)
+					{
+						links.Add(link.Key, link.Value.Href);
+					}
+				}
+			}
+		}
+
+		return new MappedResponse<TResponse>(data?.Results, meta, links);
+	}
+
+	async Task<MappedResponse<TResponse>> MapSingle<TResponse>(HttpResponseMessage response, CancellationToken cancellationToken)
+		where TResponse : class
+	{
+		TResponse? data = null;
+		if (response.Content is not null)
+		{
+			data = await response.Content.ReadFromJsonAsync<TResponse>(
+				_deserializerOptions, cancellationToken)
+				.ConfigureAwait(false);
+		}
+
+		return new MappedResponse<TResponse>(data);
 	}
 
 	async Task<Error> GetIssuuError(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -649,7 +486,7 @@ public abstract class ApiClient
 
 				Dictionary<string, string>? errorItems = null;
 				var content = result?.Details ?? result?.Fields;
-				if (content is { Count : >0 })
+				if (content is { Count: > 0 })
 				{
 					errorItems = content
 						.ToDictionary(x => x.Key, x => x.Value.Message);
@@ -678,6 +515,55 @@ public abstract class ApiClient
 		return error;
 	}
 
+	async Task<IssuuResponse> GetIssuuErrorResponse(HttpRequestMessage httpReq, HttpResponseMessage? httpResp, Exception exception)
+	{
+		var response = new IssuuResponse(
+			httpReq.Method,
+			httpReq.RequestUri,
+			false,
+			(HttpStatusCode)0,
+			error: new Error(exception.Message, exception: exception));
+
+		if (httpReq?.Content is not null)
+		{
+			response.RequestContent = await httpReq.Content.ReadAsStringAsync()
+				.ConfigureAwait(false);
+		}
+
+		if (httpResp?.Content is not null)
+		{
+			response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
+				.ConfigureAwait(false); ;
+		}
+
+		return response;
+	}
+
+	async Task<IssuuResponse<TResponse>> GetIssuuErrorResponse<TResponse>(HttpRequestMessage httpReq, HttpResponseMessage? httpResp, Exception exception)
+		where TResponse : class
+	{
+		var response = new IssuuResponse<TResponse>(
+			httpReq.Method,
+			httpReq.RequestUri,
+			false,
+			(HttpStatusCode)0,
+			error: new Error(exception.Message, exception: exception));
+
+		if (httpReq?.Content is not null)
+		{
+			response.RequestContent = await httpReq.Content.ReadAsStringAsync()
+				.ConfigureAwait(false);
+		}
+
+		if (httpResp?.Content is not null)
+		{
+			response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
+				.ConfigureAwait(false); ;
+		}
+
+		return response;
+	}
+
 	RateLimiting? GetRateLimiting(HttpResponseMessage response)
 	{
 		var headers = response.Headers;
@@ -689,49 +575,29 @@ public abstract class ApiClient
 			? new RateLimiting { Limit = limit, Remaining = remaining, Reset = DateTimeOffset.FromUnixTimeSeconds(reset) } : null;
 	}
 
+	async Task<(string?, string?)> CaptureRequestResponseContent(HttpRequestMessage httpReq, HttpResponseMessage? httpResp)
+	{
+		(string? request, string? response) = (default, default);
+
+		if (_settings.CaptureRequestContent && httpReq.Content is not null)
+		{
+			request = await httpReq.Content.ReadAsStringAsync()
+				.ConfigureAwait(false);
+		}
+
+		if (_settings.CaptureResponseContent && httpResp.Content is not null)
+		{
+			response = await httpResp.Content.ReadAsStringAsync()
+				.ConfigureAwait(false); ;
+		}
+
+		return (request, response);
+	}
+
 	string? GetHeader(string name, HttpHeaders headers)
 		=> headers.TryGetValues(name, out var values)
 		? values.First()
 		: null;
-
-	class ErrorContainer
-	{
-		[JsonPropertyName("fields")]
-		public Dictionary<string, ErrorMessageContainer>? Fields { get; set; }
-
-		[JsonPropertyName("details")]
-		public Dictionary<string, ErrorMessageContainer>? Details { get; set; }
-
-		[JsonPropertyName("message")]
-		public string Message { get; set; } = default!;
-	}
-
-	class ErrorMessageContainer
-	{
-		[JsonPropertyName("message")]
-		public string Message { get; set; } = default!;
-	}
-
-	class DataContainer<TData>
-	{
-		[JsonPropertyName("count")]
-		public int? Count { get; set; }
-
-		[JsonPropertyName("pageSize")]
-		public int? PageSize { get; set; }
-
-		[JsonPropertyName("results")]
-		public TData? Results { get; set; }
-
-		[JsonPropertyName("links")]
-		public Dictionary<string, LinkContainer>? Links { get; set; }
-	}
-
-	class LinkContainer
-	{
-		[JsonPropertyName("href")]
-		public string Href { get; set; } = default!;
-	}
 	#endregion
 
 	protected internal Lazy<TOperations> Defer<TOperations>(Func<ApiClient, TOperations> factory)
@@ -776,4 +642,104 @@ public abstract class ApiClient
 
 		return default;
 	}
+}
+
+/// <summary>
+/// Represents a mapped response.
+/// </summary>
+/// <typeparam name="TResponse">The response type.</typeparam>
+/// <param name="Data">The response data.</param>
+/// <param name="Meta">The metadata.</param>
+/// <param name="Links">The set of links for the resource.</param>
+public record MappedResponse<TResponse>(
+	TResponse? Data,
+	Meta? Meta = default,
+	Dictionary<string, string>? Links = default);
+
+/// <summary>
+/// Provides a mapping delegate for transforming the response payload
+/// </summary>
+/// <typeparam name="TResponse">The response type.</typeparam>
+/// <param name="response">The HTTP response message.</param>
+/// <param name="cancellationToken">The cancellation token.</param>
+/// <returns>The response data and meta.</returns>
+public delegate Task<MappedResponse<TResponse>> MapResponse<TResponse>(HttpResponseMessage response, CancellationToken cancellationToken);
+
+/// <summary>
+/// A container type that represents an Issuu error.
+/// </summary>
+public class ErrorContainer
+{
+	/// <summary>
+	/// The set of field errors.
+	/// </summary>
+	[JsonPropertyName("fields")]
+	public Dictionary<string, ErrorMessageContainer>? Fields { get; set; }
+
+	/// <summary>
+	/// The set of specific error details.
+	/// </summary>
+	[JsonPropertyName("details")]
+	public Dictionary<string, ErrorMessageContainer>? Details { get; set; }
+
+	/// <summary>
+	/// The error message.
+	/// </summary>
+	[JsonPropertyName("message")]
+	public string Message { get; set; } = default!;
+}
+
+/// <summary>
+/// A container type for a specific Issuu error.
+/// </summary>
+public class ErrorMessageContainer
+{
+	/// <summary>
+	/// The specific error message.
+	/// </summary>
+	[JsonPropertyName("message")]
+	public string Message { get; set; } = default!;
+}
+
+/// <summary>
+/// Represents a data container, used for set results.
+/// </summary>
+/// <typeparam name="TData">The data type.</typeparam>
+public class DataContainer<TData>
+{
+	/// <summary>
+	/// The total number of items.
+	/// </summary>
+	[JsonPropertyName("count")]
+	public int? Count { get; set; }
+
+	/// <summary>
+	/// The size of the page.
+	/// </summary>
+	[JsonPropertyName("pageSize")]
+	public int? PageSize { get; set; }
+
+	/// <summary>
+	/// The data.
+	/// </summary>
+	[JsonPropertyName("results")]
+	public TData? Results { get; set; }
+
+	/// <summary>
+	/// The set of links for the resource.
+	/// </summary>
+	[JsonPropertyName("links")]
+	public Dictionary<string, LinkContainer>? Links { get; set; }
+}
+
+/// <summary>
+/// Represents a link container.
+/// </summary>
+public class LinkContainer
+{
+	/// <summary>
+	/// Gets the link HREF.
+	/// </summary>
+	[JsonPropertyName("href")]
+	public string Href { get; set; } = default!;
 }

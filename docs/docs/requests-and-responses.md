@@ -19,6 +19,119 @@ You'd still need to use `IssuuRequest` for sending payload data where that paylo
 
 :::
 
+### Mapping HTTP responses
+
+A mapping delegate, `MapResponse<TResponse>` is provided for passing mapping functions to the `FetchAsync` code API. This is defined as:
+
+```csharp
+public delegate Task<MappedResponse<TResponse>> MapResponse<TResponse>(
+    HttpResponseMessage response, CancellationToken cancellationToken);
+```
+
+The mapping delegate must accept a HTTP response message, and return a `MappedResponse<TResponse>`, which will contain the result data, and any additional metadata and links.
+
+Example: 
+
+```csharp
+async Task<MappedResult<Document[]>> MapAsync(HttpResponse response, CancellationToken ct)
+{
+    DataContainer<TResponse>? data = default;
+    Meta? meta = default;
+    Dictionary<string, string>? links = default;
+    if (response.Content is not null)
+    {
+        data = await response.Content.ReadFromJsonAsync<DataContainer<TResponse>>(
+            _deserializerOptions, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (data is not null)
+        {
+            if (data.Count.HasValue && data.PageSize.HasValue)
+            {
+                meta = new()
+                {
+                    PageSize = data.PageSize.Value,
+                    TotalItems = data.Count.Value,
+                    TotalPages = (int)Math.Ceiling(data.Count.Value / (double)data.PageSize.Value)
+                };
+            }
+
+            if (data.Links is { Count: > 0 })
+            {
+                links = new();
+                foreach (var link in data.Links)
+                {
+                    links.Add(link.Key, link.Value.Href);
+                }
+            }
+        }
+    }
+}
+
+var request = new IssuuRequest(...);
+await client.FetchAsync<Document>(
+    request,
+    $"/drafts",
+    MapAsync,
+    cancellationToken);
+)
+```
+
+:::tip[Only Success Results]
+
+You do not need to worry about mapping an error response from the Issuu API, as the IssuuSDK will handle this automatically. When your mapping delegate is called, this is for a success HTTP status code
+
+:::
+
+Internally, the IssuuSDK makes use of this approach combined with specific container types which can be deserialized from the JSON responses.
+
+#### `DataContainer<TResult>` container type
+
+This container type is used when returning set operations, where `TResult` is the array of the intended type:
+
+| Property | Type | Notes |
+|---|---|---|
+| `Count` | `int?` | The total number of items |
+| `PageSize` | `int?` | The size of the page |
+| `Results` | `TData?` | The data |
+| `Links` | `Dictionary<string, LinkContainer>?` | The set of links for the resource |
+
+For example, when using the `Drafts.GetDraftsAsync(...)` operation, internally a `DataContainer<Document[]>` is used which returns a set of documents.
+
+:::info[Single Results]
+
+The `DataContainer<T>` type is only used for results that return sets of data. For individual result instances, such as a single document, the JSON result is directly deserialized, not in a wrapping type.
+
+:::
+
+#### `LinkContainer` container type
+
+This container type is used to deserialize a link:
+
+This container type is used to deserialzie a specific error message:
+
+| Property | Type | Notes |
+|---|---|---|
+| `Href` | `string` | The error message |
+
+#### `ErrorContainer` container type
+
+This container type is used to deserialize an error response:
+
+| Property | Type | Notes |
+|---|---|---|
+| `Fields` | `Dictionary<string, ErrorMessageContainer>?` | The set of field errors |
+| `Details` | `Dictionary<string, ErrorMessageContainer>?` | The set of specific error details |
+| `Message` | `string` | The error message |
+
+#### `ErrorMessageContainer` container type
+
+This container type is used to deserialzie a specific error message:
+
+| Property | Type | Notes |
+|---|---|---|
+| `Message` | `string` | The error message |
+
 ### HTTP GET example - returning a single resource
 
 ```csharp
