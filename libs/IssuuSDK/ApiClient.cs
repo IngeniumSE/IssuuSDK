@@ -95,6 +95,7 @@ public abstract class ApiClient : IApiClient
 		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
+		string? requestContent = await CaptureRequestContent(httpReq).ConfigureAwait(false);
 		try
 		{
 			httpResp = await _http.SendAsync(httpReq, cancellationToken)
@@ -106,13 +107,14 @@ public abstract class ApiClient : IApiClient
 				httpResp)
 				.ConfigureAwait(false);
 
-			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
+			transformedResponse.RequestContent = requestContent;
+			transformedResponse.ResponseContent = await CaptureResponseContent(httpResp).ConfigureAwait(false);
 
 			return transformedResponse;
 		}
 		catch (Exception ex)
 		{
-			return await GetIssuuErrorResponse(httpReq, httpResp, ex).ConfigureAwait(false);
+			return await GetIssuuErrorResponse(httpReq, requestContent, httpResp, ex).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -129,6 +131,7 @@ public abstract class ApiClient : IApiClient
 		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
+		string? requestContent = await CaptureRequestContent(httpReq).ConfigureAwait(false);
 		try
 		{
 			httpResp = await _http.SendAsync(httpReq, cancellationToken).ConfigureAwait(false);
@@ -139,13 +142,14 @@ public abstract class ApiClient : IApiClient
 				httpResp)
 				.ConfigureAwait(false);
 
-			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
+			transformedResponse.RequestContent = requestContent;
+			transformedResponse.ResponseContent = await CaptureResponseContent(httpResp).ConfigureAwait(false);
 
 			return transformedResponse;
 		}
 		catch (Exception ex)
 		{
-			return await GetIssuuErrorResponse(httpReq, httpResp, ex).ConfigureAwait(false);
+			return await GetIssuuErrorResponse(httpReq, requestContent, httpResp, ex).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -165,6 +169,7 @@ public abstract class ApiClient : IApiClient
 		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
+		string? requestContent = await CaptureRequestContent(httpReq).ConfigureAwait(false);
 		try
 		{
 			httpResp = await _http.SendAsync(httpReq, cancellationToken)
@@ -178,13 +183,14 @@ public abstract class ApiClient : IApiClient
 				cancellationToken)
 				.ConfigureAwait(false);
 
-			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
+			transformedResponse.RequestContent = requestContent;
+			transformedResponse.ResponseContent = await CaptureResponseContent(httpResp).ConfigureAwait(false);
 
 			return transformedResponse;
 		}
 		catch (Exception ex)
 		{
-			return await GetIssuuErrorResponse<TData>(httpReq, httpResp, ex).ConfigureAwait(false);
+			return await GetIssuuErrorResponse<TData>(httpReq, requestContent, httpResp, ex).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -203,6 +209,7 @@ public abstract class ApiClient : IApiClient
 		using var httpReq = CreateHttpRequest(request);
 		HttpResponseMessage? httpResp = null;
 
+		string? requestContent = await CaptureRequestContent(httpReq).ConfigureAwait(false);
 		try
 		{
 			httpResp = await _http.SendAsync(httpReq, cancellationToken)
@@ -216,13 +223,18 @@ public abstract class ApiClient : IApiClient
 				cancellationToken)
 				.ConfigureAwait(false);
 
-			(transformedResponse.RequestContent, transformedResponse.ResponseContent) = await CaptureRequestResponseContent(httpReq, httpResp).ConfigureAwait(false);
+			transformedResponse.RequestContent = requestContent;
+			transformedResponse.ResponseContent = await CaptureResponseContent(httpResp).ConfigureAwait(false);
 
 			return transformedResponse;
 		}
 		catch (Exception ex)
 		{
-			return await GetIssuuErrorResponse<TResponseData>(httpReq, httpResp, ex).ConfigureAwait(false);
+			return await GetIssuuErrorResponse<TResponseData>(
+				httpReq,
+				requestContent,
+				httpResp,
+				ex).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -515,7 +527,11 @@ public abstract class ApiClient : IApiClient
 		return error;
 	}
 
-	async Task<IssuuResponse> GetIssuuErrorResponse(HttpRequestMessage httpReq, HttpResponseMessage? httpResp, Exception exception)
+	async Task<IssuuResponse> GetIssuuErrorResponse(
+		HttpRequestMessage httpReq,
+		string? requestContent,
+		HttpResponseMessage? httpResp,
+		Exception exception)
 	{
 		var response = new IssuuResponse(
 			httpReq.Method,
@@ -524,11 +540,7 @@ public abstract class ApiClient : IApiClient
 			(HttpStatusCode)0,
 			error: new Error(exception.Message, exception: exception));
 
-		if (httpReq?.Content is not null)
-		{
-			response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-				.ConfigureAwait(false);
-		}
+		response.RequestContent = requestContent;
 
 		if (httpResp?.Content is not null)
 		{
@@ -539,7 +551,11 @@ public abstract class ApiClient : IApiClient
 		return response;
 	}
 
-	async Task<IssuuResponse<TResponse>> GetIssuuErrorResponse<TResponse>(HttpRequestMessage httpReq, HttpResponseMessage? httpResp, Exception exception)
+	async Task<IssuuResponse<TResponse>> GetIssuuErrorResponse<TResponse>(
+		HttpRequestMessage httpReq,
+		string? requestContent,
+		HttpResponseMessage? httpResp,
+		Exception exception)
 		where TResponse : class
 	{
 		var response = new IssuuResponse<TResponse>(
@@ -549,12 +565,7 @@ public abstract class ApiClient : IApiClient
 			(HttpStatusCode)0,
 			error: new Error(exception.Message, exception: exception));
 
-		if (httpReq?.Content is not null)
-		{
-			response.RequestContent = await httpReq.Content.ReadAsStringAsync()
-				.ConfigureAwait(false);
-		}
-
+		response.RequestContent = requestContent;
 		if (httpResp?.Content is not null)
 		{
 			response.ResponseContent = await httpResp.Content.ReadAsStringAsync()
@@ -575,23 +586,30 @@ public abstract class ApiClient : IApiClient
 			? new RateLimiting { Limit = limit, Remaining = remaining, Reset = DateTimeOffset.FromUnixTimeSeconds(reset) } : null;
 	}
 
-	async Task<(string?, string?)> CaptureRequestResponseContent(HttpRequestMessage httpReq, HttpResponseMessage? httpResp)
+	async Task<string?> CaptureRequestContent(HttpRequestMessage httpReq)
 	{
-		(string? request, string? response) = (default, default);
-
 		if (_settings.CaptureRequestContent && httpReq.Content is not null)
 		{
-			request = await httpReq.Content.ReadAsStringAsync()
+			var request = await httpReq.Content.ReadAsStringAsync()
 				.ConfigureAwait(false);
+
+			return request;
 		}
 
+		return null;
+	}
+
+	async Task<string?> CaptureResponseContent(HttpResponseMessage httpResp)
+	{
 		if (_settings.CaptureResponseContent && httpResp.Content is not null)
 		{
-			response = await httpResp.Content.ReadAsStringAsync()
-				.ConfigureAwait(false); ;
+			var request = await httpResp.Content.ReadAsStringAsync()
+				.ConfigureAwait(false);
+
+			return request;
 		}
 
-		return (request, response);
+		return null;
 	}
 
 	string? GetHeader(string name, HttpHeaders headers)
